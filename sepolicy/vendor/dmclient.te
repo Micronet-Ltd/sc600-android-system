@@ -1,0 +1,74 @@
+type dmclient,domain;
+net_domain(dmclient)
+
+type dmclient_exec,exec_type,vendor_file_type,file_type;
+typeattribute dmclient binder_in_vendor_violators;
+typeattribute dmclient dmclient_server;
+typeattribute dmclient mlstrustedsubject;
+typeattribute dmclient data_between_core_and_vendor_violators;
+
+init_daemon_domain(dmclient)
+
+#allow dmclient self:socket ioctl;
+#============= dmclient ==============
+allow dmclient binder_device:chr_file { read write ioctl open };
+allow dmclient servicemanager:binder call;
+allow dmclient self:socket create;
+#allow dmclient self:capability dac_override;
+allow dmclient vendor_data_file:file { ioctl read write getattr open };
+allow dmclient radio:binder { transfer call };
+allow dmclient omadm_service_service:service_manager find;
+allow dmclient vendor_data_file:dir write;
+allow dmclient vendor_data_file:dir add_name;
+allow dmclient vendor_data_file:file create;
+allow dmclient self:udp_socket create;
+allow dmclient vendor_data_file:file { lock setattr };
+allow dmclient dnsproxyd_socket:sock_file write;
+allow dmclient netd:unix_stream_socket connectto;
+allow dmclient port:tcp_socket name_connect;
+allow dmclient self:capability2 block_suspend;
+allow dmclient self:tcp_socket { create setopt };
+allow dmclient self:udp_socket create;
+allow dmclient sysfs_wake_lock:file { read write open };
+allow dmclient vendor_data_file:dir { read open };
+allow dmclient vendor_data_file:file { lock setattr };
+allow netd dmclient:fd use;
+allow netd dmclient:tcp_socket { read write getopt };
+allow dmclient radio_prop:file read;
+allow dmclient vendor_data_file:dir remove_name;
+allow dmclient radio_prop:file open;
+allow dmclient radio_prop:file getattr;
+allow dmclient vendor_data_file:file unlink;
+allow dmclient sysfs:dir read;
+allow dmclient vendor_data_file:file append;
+allow dmclient sysfs:dir open;
+allow dmclient sysfs_battery_supply:dir read;
+allow dmclient sysfs_usb_supply:dir read;
+allow dmclient sysfs_battery_supply:dir open;
+allow dmclient sysfs_usb_supply:dir open;
+allow dmclient sysfs_battery_supply:dir search;
+allow dmclient sysfs_battery_supply:file { read getattr };
+allow dmclient sysfs_usb_supply:dir search;
+allow dmclient sysfs_usb_supply:file { read getattr };
+allow dmclient sysfs_battery_supply:file open;
+allow dmclient sysfs_usb_supply:file open;
+allow dmclient self:socket { write read };
+allow dmclient cache_file:dir { write remove_name };
+allow dmclient cache_file:file unlink;
+allow dmclient self:capability { dac_read_search dac_override };
+allow dmclient cache_file:dir search;
+
+#============= dmclient ==============
+allow dmclient default_android_service:service_manager find;
+
+#============= servicemanager ==============
+allow servicemanager dmclient:dir search;
+allow servicemanager dmclient:file { read open };
+allow servicemanager dmclient:process getattr;
+
+#============= radio ==============
+#allow radio default_android_service:service_manager add;
+typeattribute radio data_between_core_and_vendor_violators;
+allow radio dmclient:binder call;
+allow radio vendor_data_file:file { read getattr };
+allow radio vendor_data_file:file open;

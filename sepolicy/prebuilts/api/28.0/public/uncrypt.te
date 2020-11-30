@@ -2,6 +2,7 @@
 type uncrypt, domain, mlstrustedsubject;
 type uncrypt_exec, exec_type, file_type;
 
+typeattribute uncrypt data_between_core_and_vendor_violators;
 allow uncrypt self:global_capability_class_set dac_override;
 
 # Read OTA zip file from /data/data/com.google.android.gsf/app_download
@@ -43,3 +44,6 @@ allow uncrypt proc_cmdline:file r_file_perms;
 
 # Read files in /sys
 r_dir_file(uncrypt, sysfs_dt_firmware_android)
+allow uncrypt vendor_data_file:file getattr;
+allow uncrypt vendor_data_file:file read;
+allow uncrypt vendor_data_file:file open;

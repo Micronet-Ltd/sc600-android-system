@@ -2,4 +2,8 @@ typeattribute radio coredomain;
 
 app_domain(radio)
 
+allow radio config_gz:file { open read getattr };
+allow radio selinuxfs:file open;
+allow radio selinuxfs:file read;
+
 read_runtime_log_tags(radio)
