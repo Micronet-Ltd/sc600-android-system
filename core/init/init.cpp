@@ -762,9 +762,9 @@ int main(int argc, char** argv) {
     std::string bootmode = GetProperty("ro.bootmode", "");
 
     int is_charger = 0;
-    int wd_fd = open("/sys/devices/platform/watchdogpin/wd_toggle_active", O_WRONLY);
+// BYU FIXME    int wd_fd = open("/sys/devices/platform/watchdogpin/wd_toggle_active", O_WRONLY);
+    int wd_fd = open("/sys/devices/platform/soc/soc:watchdogpin/wd_toggle_active", O_WRONLY);
     char wd_toggle[2] = {0};
-
     is_charger = (bootmode == "charger");
     sprintf(wd_toggle, "%d", (0 == is_charger));
     LOG(INFO) << "Boot mode: " << bootmode.c_str() << "[" << wd_toggle << "]\n";
@@ -773,8 +773,7 @@ int main(int argc, char** argv) {
         close(wd_fd);
     }
 
-    LOG(ERROR) << "BYU BYU FIXME  init.cpp";
-/* BYU FIXME */  system("echo 1 > /sys/devices/platform/watchdogpin/wd_toggle_active"); 
+/* BYU FIXME   system("echo 1 > /sys/devices/platform/watchdogpin/wd_toggle_active");  */
 
     if (bootmode == "charger") {
         am.QueueEventTrigger("charger");
