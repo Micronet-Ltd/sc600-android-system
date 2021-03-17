@@ -439,6 +439,15 @@ bool IsLegalPropertyName(const std::string& name) {
 
     return true;
 }
-
+bool global_bootmode() {
+    std::string cmdline;
+    LOG(INFO) << "global_bootmode";
+    android::base::ReadFileToString("/proc/cmdline", &cmdline);
+    if (cmdline.find("ffbm-") != std::string::npos ){
+        LOG(INFO) << "global_bootmode ffbm";
+        return true;
+    }
+    return false;
+}
 }  // namespace init
 }  // namespace android

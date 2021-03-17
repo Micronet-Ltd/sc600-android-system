@@ -1,5 +1,6 @@
 cc_library_headers {
     name: "libnetd_client_headers",
+    vendor_available:true,
     export_include_dirs: ["include"],
 }
 

@@ -5,3 +5,12 @@
 ###
 
 type system_app, domain;
+typeattribute system_app data_between_core_and_vendor_violators;
+
+#============= system_app ==============
+allow system_app fs_bpf:dir search;
+allow system_app vendor_data_file:dir write;
+allow system_app vendor_data_file:dir add_name;
+allow system_app vendor_data_file:file create;
+allow system_app vendor_data_file:file { read write open };
+allow system_app vendor_data_file:file getattr;

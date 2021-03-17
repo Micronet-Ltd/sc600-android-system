@@ -301,6 +301,7 @@ on late-init
     trigger post-fs-data
 
     # Now we can start zygote for devices with file based encryption
+    stop zygote_mmi
     trigger zygote-start
 
     # Load persist properties and override properties (if enabled) from /data.
@@ -581,6 +582,14 @@ on zygote-start && property:ro.crypto.state=encrypted && property:ro.crypto.type
     start zygote
     start zygote_secondary
 
+on zygote-start && property:ro.bootmode=ffbm-01
+    # A/B update verifier that marks a successful boot.
+    exec_start update_verifier_nonencrypted
+    start netd
+    stop zygote
+    stop zygote_secondary
+    start zygote_mmi
+
 on boot
     # basic network init
     ifup lo
@@ -771,3 +780,4 @@ on property:ro.debuggable=1
 service flash_recovery /system/bin/install-recovery.sh
     class main
     oneshot
+

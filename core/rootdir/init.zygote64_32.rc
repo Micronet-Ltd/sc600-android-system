@@ -22,3 +22,16 @@ service zygote_secondary /system/bin/app_process32 -Xzygote /system/bin --zygote
     socket zygote_secondary stream 660 root system
     onrestart restart zygote
     writepid /dev/cpuset/foreground/tasks
+
+
+service zygote_mmi /system/bin/app_process64 -Xzygote /system/bin --zygote --start-system-server --socket-name=zygote
+    class main
+    priority -20
+    user root
+    group root readproc reserved_disk
+    socket zygote stream 660 root system
+    onrestart write /sys/android_power/request_state wake
+    onrestart write /sys/power/state on
+    onrestart restart media
+    writepid /dev/cpuset/foreground/tasks
+    onrestart restart vendor.servicetracker-1-0
