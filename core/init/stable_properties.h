@@ -25,7 +25,7 @@ namespace init {
 
 static constexpr const char* kPartnerPrefixes[] = {
     "init.svc.vendor.", "ro.vendor.", "persist.vendor.", "vendor.", "init.svc.odm.", "ro.odm.",
-    "persist.odm.",     "odm.",       "ro.boot.",
+    "persist.odm.",     "odm.",       "ro.boot.",        "vib.",
 };
 
 static const std::set<std::string> kExportedActionableProperties = {
