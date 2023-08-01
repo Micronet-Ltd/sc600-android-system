@@ -17,8 +17,6 @@
  ******************************************************************************/
 #include <errno.h>
 #include <malloc.h>
-#include <stdarg.h>
-#include <stdio.h>
 #include <pthread.h> /* must be 1st header defined  */
 
 #include <android-base/stringprintf.h>
@@ -66,9 +64,6 @@ static pthread_cond_t   gki_timer_update_cond;
 #ifdef NO_GKI_RUN_RETURN
 static pthread_t timer_thread_id = 0;
 #endif
-#if (NXP_EXTNS == TRUE)
-uint8_t gki_buf_init_done = false;
-#endif
 
 typedef struct {
   uint8_t task_id;         /* GKI task id */
@@ -78,8 +73,6 @@ typedef struct {
   pthread_mutex_t* pMutex; /* for android*/
 } gki_pthread_info_t;
 gki_pthread_info_t gki_pthread_info[GKI_MAX_TASKS];
-
-static struct tms buffer;
 
 /*******************************************************************************
 **
@@ -124,20 +117,12 @@ void* gki_task_entry(void* params) {
 void GKI_init(void) {
   pthread_mutexattr_t attr;
   tGKI_OS* p_os;
-#if (NXP_EXTNS == TRUE)
-  /* Added to avoid re-initialization of memory pool (memory leak) */
-  if (!gki_buf_init_done) {
-    memset(&gki_cb, 0, sizeof(gki_cb));
-    gki_buffer_init();
-    gki_buf_init_done = true;
-  }
-#else
-  memset(&gki_cb, 0, sizeof(gki_cb));
-  gki_buffer_init();
-#endif
 
+  memset(&gki_cb, 0, sizeof(gki_cb));
+
+  gki_buffer_init();
   gki_timers_init();
-  gki_cb.com.OSTicks = (uint32_t)times(&buffer);
+  gki_cb.com.OSTicks = (uint32_t)times(0);
 
   pthread_mutexattr_init(&attr);
 
@@ -156,9 +141,6 @@ void GKI_init(void) {
   p_os->no_timer_suspend = GKI_TIMER_TICK_RUN_COND;
   pthread_mutex_init(&p_os->gki_timer_mutex, NULL);
   pthread_cond_init(&p_os->gki_timer_cond, NULL);
-#if (NXP_EXTNS == TRUE)
-  pthread_mutexattr_destroy(&attr);
-#endif
 }
 
 /*******************************************************************************
@@ -232,7 +214,7 @@ uint8_t GKI_create_task(TASKPTR task_entry, uint8_t task_id, int8_t* taskname,
 
   pthread_attr_init(&attr1);
 /* by default, pthread creates a joinable thread */
-#if (false == GKI_PTHREAD_JOINABLE)
+#if (FALSE == GKI_PTHREAD_JOINABLE)
   pthread_attr_setdetachstate(&attr1, PTHREAD_CREATE_DETACHED);
 
   DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
@@ -254,10 +236,7 @@ uint8_t GKI_create_task(TASKPTR task_entry, uint8_t task_id, int8_t* taskname,
 
   ret = pthread_create(&gki_cb.os.thread_id[task_id], &attr1, gki_task_entry,
                        &gki_pthread_info[task_id]);
-#if (NXP_EXTNS == TRUE)
-  pthread_attr_destroy(&attr1);
-  pthread_condattr_destroy(&attr);
-#endif
+
   if (ret != 0) {
     DLOG_IF(INFO, nfc_debug_enabled)
         << StringPrintf("pthread_create failed(%d), %s!", ret, taskname);
@@ -266,7 +245,7 @@ uint8_t GKI_create_task(TASKPTR task_entry, uint8_t task_id, int8_t* taskname,
 
   if (pthread_getschedparam(gki_cb.os.thread_id[task_id], &policy, &param) ==
       0) {
-#if (PBS_SQL_TASK == true)
+#if (PBS_SQL_TASK == TRUE)
     if (task_id == PBS_SQL_TASK) {
       DLOG_IF(INFO, nfc_debug_enabled)
           << StringPrintf("PBS SQL lowest priority task");
@@ -308,7 +287,7 @@ void GKI_shutdown(void) {
   uint8_t task_id;
   volatile int* p_run_cond = &gki_cb.os.no_timer_suspend;
   int oldCOnd = 0;
-#if (false == GKI_PTHREAD_JOINABLE)
+#if (FALSE == GKI_PTHREAD_JOINABLE)
   int i = 0;
 #else
   int result;
@@ -319,6 +298,7 @@ void GKI_shutdown(void) {
   for (task_id = GKI_MAX_TASKS; task_id > 0; task_id--) {
     if (gki_cb.com.OSRdyTbl[task_id - 1] != TASK_DEAD) {
       gki_cb.com.OSRdyTbl[task_id - 1] = TASK_DEAD;
+
       /* paranoi settings, make sure that we do not execute any mailbox events
        */
       gki_cb.com.OSWaitEvt[task_id - 1] &=
@@ -326,16 +306,11 @@ void GKI_shutdown(void) {
             TASK_MBOX_3_EVT_MASK);
       GKI_send_event(task_id - 1, EVENT_MASK(GKI_SHUTDOWN_EVT));
 
-      if (((task_id - 1) == BTU_TASK) && gki_cb.com.p_tick_cb &&
-          gki_cb.com.system_tick_running) {
-        gki_cb.com.system_tick_running = false;
-        (gki_cb.com.p_tick_cb)(false); /* stop system tick */
-      }
-
-#if (false == GKI_PTHREAD_JOINABLE)
+#if (FALSE == GKI_PTHREAD_JOINABLE)
       i = 0;
-      while ((gki_cb.com.OSWaitEvt[task_id - 1] != 0) && (++i < 15))
-        usleep(2 * 1000);
+
+      while ((gki_cb.com.OSWaitEvt[task_id - 1] != 0) && (++i < 10))
+        usleep(100 * 1000);
 #else
       /* wait for proper Arnold Schwarzenegger task state */
       result = pthread_join(gki_cb.os.thread_id[task_id - 1], NULL);
@@ -345,7 +320,7 @@ void GKI_shutdown(void) {
       }
 #endif
       DLOG_IF(INFO, nfc_debug_enabled)
-          << StringPrintf("task %s dead", gki_cb.com.OSTName[task_id-1]);
+          << StringPrintf("task %s dead", gki_cb.com.OSTName[task_id]);
       GKI_exit_task(task_id - 1);
     }
   }
@@ -355,7 +330,7 @@ void GKI_shutdown(void) {
 /*    pthread_mutex_destroy(&GKI_sched_mutex); */
 /*    pthread_mutex_destroy(&thread_delay_mutex);
  pthread_cond_destroy (&thread_delay_cond); */
-#if (false == GKI_PTHREAD_JOINABLE)
+#if (FALSE == GKI_PTHREAD_JOINABLE)
   i = 0;
 #endif
 
@@ -380,7 +355,7 @@ void GKI_shutdown(void) {
  **
  ** Description     This function runs a task
  **
- ** Parameters:     start: true start system tick (again), false stop
+ ** Parameters:     start: TRUE start system tick (again), FALSE stop
  **
  ** Returns         void
  **
@@ -391,7 +366,7 @@ void gki_system_tick_start_stop_cback(bool start) {
 #ifdef GKI_TICK_TIMER_DEBUG
   static volatile int wake_lock_count;
 #endif
-  if (false == start) {
+  if (start == false) {
     /* this can lead to a race condition. however as we only read this variable
      * in the timer loop
      * we should be fine with this approach. otherwise uncomment below mutexes.
@@ -475,11 +450,8 @@ void GKI_run(__attribute__((unused)) void* p_task_id) {
   DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("%s enter", __func__);
   struct timespec delay;
   int err = 0;
-#if (NXP_EXTNS == TRUE)
-  uint8_t rtask = 0;
-  (void)p_task_id;
-#endif
   volatile int* p_run_cond = &gki_cb.os.no_timer_suspend;
+
 #ifndef GKI_NO_TICK_STOP
   /* register start stop function which disable timer loop in GKI_run() when no
    * timers are
@@ -498,15 +470,7 @@ void GKI_run(__attribute__((unused)) void* p_task_id) {
 
   pthread_attr_init(&timer_attr);
   pthread_attr_setdetachstate(&timer_attr, PTHREAD_CREATE_DETACHED);
-#if (NXP_EXTNS == TRUE)
-  int ret = 0;
-  ret = pthread_create(&timer_thread_id, &timer_attr, timer_thread, NULL);sdadsa
-  pthread_attr_destroy(&timer_attr);
-  if (ret != 0)
-#else
-  if (pthread_create(&timer_thread_id, &timer_attr, timer_thread, NULL) != 0)
-#endif
-  {
+  if (pthread_create(&timer_thread_id, &timer_attr, timer_thread, NULL) != 0) {
     DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
         "GKI_run: pthread_create failed to create timer_thread!");
     return GKI_FAILURE;
@@ -514,9 +478,6 @@ void GKI_run(__attribute__((unused)) void* p_task_id) {
 #else
   DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("GKI_run, run_cond(%p)=%d ", p_run_cond, *p_run_cond);
-#if (NXP_EXTNS == TRUE)
-  rtask = GKI_get_taskid();
-#endif
   for (; GKI_TIMER_TICK_EXIT_COND != *p_run_cond;) {
     do {
       /* adjust hear bit tick in btld by changning TICKS_PER_SEC!!!!! this
@@ -544,14 +505,6 @@ void GKI_run(__attribute__((unused)) void* p_task_id) {
  * block timer main thread till re-armed by  */
 #ifdef GKI_TICK_TIMER_DEBUG
     DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(">>> SUSPENDED");
-#endif
-#if (NXP_EXTNS == TRUE)
-    if (gki_cb.com.OSRdyTbl[rtask] == TASK_DEAD) {
-      gki_cb.com.OSWaitEvt[rtask] = 0;
-      DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf
-              ("GKI TASK_DEAD received. exit thread %d...", rtask);
-      gki_cb.os.thread_id[rtask] = 0;
-    }
 #endif
     if (GKI_TIMER_TICK_EXIT_COND != *p_run_cond) {
       pthread_mutex_lock(&gki_cb.os.gki_timer_mutex);
@@ -586,7 +539,7 @@ void GKI_run(__attribute__((unused)) void* p_task_id) {
 void GKI_stop(void) {
   uint8_t task_id;
 
-  /*  gki_queue_timer_cback(false); */
+  /*  gki_queue_timer_cback(FALSE); */
   /* TODO - add code here if needed*/
 
   for (task_id = 0; task_id < GKI_MAX_TASKS; task_id++) {
@@ -623,7 +576,7 @@ uint16_t GKI_wait(uint16_t flag, uint32_t timeout) {
   if (rtask >= GKI_MAX_TASKS) {
     LOG(ERROR) << StringPrintf("%s() Exiting thread; rtask %d >= %d", __func__,
                                rtask, GKI_MAX_TASKS);
-    return EVENT_MASK(GKI_UNKNOWN_TASK_EVT);
+    return EVENT_MASK(GKI_SHUTDOWN_EVT);
   }
 
   gki_pthread_info_t* p_pthread_info = &gki_pthread_info[rtask];
@@ -668,13 +621,7 @@ uint16_t GKI_wait(uint16_t flag, uint32_t timeout) {
       //            abstime.tv_sec = currSysTime.time;
       //            abstime.tv_nsec = NANOSEC_PER_MILLISEC *
       //            currSysTime.millitm;
-
-
-      /* TODO: Need to check for the return status for ret_clk */
-      int ret_clk = clock_gettime(CLOCK_MONOTONIC, &abstime);
-      if (ret_clk == -1) {
-        LOG(ERROR) << StringPrintf("%s: clock_gettime failed\n", __func__);
-      }
+      clock_gettime(CLOCK_MONOTONIC, &abstime);
 
       /* add timeout */
       sec = timeout / 1000;
@@ -695,7 +642,7 @@ uint16_t GKI_wait(uint16_t flag, uint32_t timeout) {
     }
 
     /* TODO: check, this is probably neither not needed depending on
-     phtread_cond_wait() implementation,
+     phtread_cond_wait() implmentation,
      e.g. it looks like it is implemented as a counter in which case multiple
      cond_signal
      should NOT be lost! */
@@ -736,7 +683,6 @@ uint16_t GKI_wait(uint16_t flag, uint32_t timeout) {
   /* unlock thread_evt_mutex as pthread_cond_wait() does auto lock mutex when
    * cond is met */
   pthread_mutex_unlock(&gki_cb.os.thread_evt_mutex[rtask]);
-
   return (evt);
 }
 
@@ -780,7 +726,7 @@ void GKI_delay(uint32_t timeout) {
   }
 
   DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("GKI_delay %d %d", rtask, timeout);
+      << StringPrintf("GKI_delay %d %d done", rtask, timeout);
   return;
 }
 
@@ -861,14 +807,12 @@ uint8_t GKI_isend_event(uint8_t task_id, uint16_t event) {
 *******************************************************************************/
 uint8_t GKI_get_taskid(void) {
   int i;
-
   pthread_t thread_id = pthread_self();
   for (i = 0; i < GKI_MAX_TASKS; i++) {
     if (gki_cb.os.thread_id[i] == thread_id) {
       return (i);
     }
   }
-
   return (-1);
 }
 
@@ -915,8 +859,8 @@ int8_t* GKI_map_taskname(uint8_t task_id) {
 *******************************************************************************/
 void GKI_enable(void) {
   pthread_mutex_unlock(&gki_cb.os.GKI_mutex);
-  /*  pthread_mutex_xx is nesting save, no need for this: already_disabled = 0;
-   */
+  /* 	pthread_mutex_xx is nesting save, no need for this: already_disabled =
+   * 0; */
   return;
 }
 
@@ -932,10 +876,10 @@ void GKI_enable(void) {
 
 void GKI_disable(void) {
   // DLOG_IF(INFO, nfc_debug_enabled) <<
-  // StringPrintf("GKI_disable");");
+  // StringPrintf("GKI_disable");
 
-  /*  pthread_mutex_xx is nesting save, no need for this: if (!already_disabled)
-     {
+  /*	pthread_mutex_xx is nesting save, no need for this: if
+     (!already_disabled) {
       already_disabled = 1; */
   pthread_mutex_lock(&gki_cb.os.GKI_mutex);
   /*  } */
@@ -1003,7 +947,7 @@ int8_t* GKI_get_time_stamp(int8_t* tbuf) {
   uint32_t h_time;
   int8_t* p_out = tbuf;
 
-  gki_cb.com.OSTicks = (uint32_t)times(&buffer);
+  gki_cb.com.OSTicks = times(0);
   ms_time = GKI_TICKS_TO_MS(gki_cb.com.OSTicks);
   s_time = ms_time / 100; /* 100 Ticks per second */
   m_time = s_time / 60;
@@ -1104,7 +1048,6 @@ void GKI_os_free(void* p_mem) {
 **
 *******************************************************************************/
 uint8_t GKI_suspend_task(uint8_t task_id) {
-  (void)task_id;
   DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("GKI_suspend_task %d - NOT implemented", task_id);
 
@@ -1130,8 +1073,6 @@ uint8_t GKI_suspend_task(uint8_t task_id) {
 **
 *******************************************************************************/
 uint8_t GKI_resume_task(uint8_t task_id) {
-  (void)task_id;
-
   DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("GKI_resume_task %d - NOT implemented", task_id);
 
@@ -1213,7 +1154,7 @@ void GKI_sched_lock(void) {
 **
 *******************************************************************************/
 void GKI_sched_unlock(void) {
-  DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("GKI_sched_unlock");;
+  DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("GKI_sched_unlock");
   GKI_enable();
 }
 
